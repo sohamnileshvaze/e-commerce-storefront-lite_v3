@@ -1,0 +1,12 @@
+[project]
+name = "e-commerce-storefront-lite"
+version = "0.1.0"
+description = "Foundation utilities for the E-Commerce Storefront Lite backend."
+readme = "README.md"
+requires-python = "^3.11"
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "passlib[bcrypt]",
+    "python-jose[cryptography]"
+]
