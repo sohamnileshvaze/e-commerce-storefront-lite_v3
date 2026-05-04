@@ -23,11 +23,11 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _create_token(user_id: int, email: str) -> str:
+def _build_access_token(user_id: int, email: str) -> str:
     settings = get_settings()
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    token_payload = {"sub": str(user_id), "email": email}
-    return create_access_token(data=token_payload, expires_delta=expires_delta)
+    payload = {"sub": str(user_id), "email": email}
+    return create_access_token(data=payload, expires_delta=expires_delta)
 
 
 @router.post("/signup", status_code=201, response_model=UserOut)
@@ -36,7 +36,7 @@ def signup(
     request: Request,
     conn: sqlite3.Connection = Depends(get_db),
 ) -> UserOut:
-    """Create a new user and return the public profile."""
+    """Register a new user and return the public profile."""
     repo = UserRepository()
     password_hash = get_password_hash(body.password)
     normalized_email = _normalize_email(body.email)
@@ -60,22 +60,18 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> Token:
-    """Authenticate credentials and return a bearer token."""
+    """Validate credentials and return a bearer token."""
     repo = UserRepository()
     normalized_email = _normalize_email(form_data.username)
     user_row = repo.get_user_by_email(conn, normalized_email)
     if not user_row or not verify_password(form_data.password, user_row["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = _create_token(user_row["id"], user_row["email"])
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    access_token = _build_access_token(user_row["id"], user_row["email"])
     return Token(access_token=access_token, token_type="bearer")
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), conn: sqlite3.Connection = Depends(get_db)) -> dict:
-    """Decode a bearer token and return the current user."""
+    """Decode bearer token and return the current user's public record."""
     payload = decode_access_token(token)
     user_id = payload.get("sub")
     email = payload.get("email")
@@ -85,7 +81,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn: sqlite3.Connecti
         resolved_id = int(user_id)
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    user = UserRepository().get_user_by_id(conn, resolved_id)
-    if not user:
+    user_row = UserRepository().get_user_by_id(conn, resolved_id)
+    if not user_row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return UserOut(**user).dict()
+    return UserOut(**user_row).dict()
