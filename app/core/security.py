@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from jose import JWTError, jwt  # type: ignore[import]
+from passlib.context import CryptContext  # type: ignore[import]
 
 from .config import get_settings
 
