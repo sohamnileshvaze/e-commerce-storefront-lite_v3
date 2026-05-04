@@ -18,8 +18,10 @@ from app.repositories.user_repository import UserRepository
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
 
 def _create_token(user_id: int, email: str) -> str:
     settings = get_settings()
@@ -34,13 +36,14 @@ def signup(
     request: Request,
     conn: sqlite3.Connection = Depends(get_db),
 ) -> UserOut:
-    """Create a new user, returning their public profile."""
+    """Create a new user and return the public profile."""
     repo = UserRepository()
     password_hash = get_password_hash(body.password)
+    normalized_email = _normalize_email(body.email)
     try:
-        user_id = repo.create_user(conn, body.name.strip(), _normalize_email(body.email), password_hash)
+        user_id = repo.create_user(conn, body.name.strip(), normalized_email, password_hash)
     except ValueError as exc:
-        if str(exc) == "duplicate_email":
+        if exc.args and exc.args[0] == "duplicate_email":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
         raise
     user_row = repo.get_user_by_id(conn, user_id)
@@ -49,14 +52,18 @@ def signup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to return created user for {request.url.path}",
         )
-    return user_row
+    return UserOut(**user_row)
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), conn: sqlite3.Connection = Depends(get_db)) -> Token:
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> Token:
     """Authenticate credentials and return a bearer token."""
     repo = UserRepository()
-    user_row = repo.get_user_by_email(conn, _normalize_email(form_data.username))
+    normalized_email = _normalize_email(form_data.username)
+    user_row = repo.get_user_by_email(conn, normalized_email)
     if not user_row or not verify_password(form_data.password, user_row["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -64,7 +71,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), conn: sqlite3.Connec
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = _create_token(user_row["id"], user_row["email"])
-    return {"access_token": access_token, "token_type": "bearer"}
+    return Token(access_token=access_token, token_type="bearer")
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), conn: sqlite3.Connection = Depends(get_db)) -> dict:
@@ -81,4 +88,4 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn: sqlite3.Connecti
     user = UserRepository().get_user_by_id(conn, resolved_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
+    return UserOut(**user).dict()
