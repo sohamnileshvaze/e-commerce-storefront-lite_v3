@@ -47,10 +47,11 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
     """Yield a sqlite3 connection for FastAPI dependencies."""
 
     settings = get_settings()
+    db_url = settings.DATABASE_URL
     try:
-        db_path = path_from_database_url(settings.DATABASE_URL)
+        db_path = path_from_database_url(db_url)
     except ValueError as exc:
-        logger.exception("Invalid DATABASE_URL %s", settings.DATABASE_URL)
+        logger.exception("Invalid DATABASE_URL %s", db_url)
         raise HTTPException(status_code=500, detail="Invalid database configuration") from exc
 
     conn = get_db_connection(db_path)
@@ -64,10 +65,11 @@ def init_db() -> None:
     """Create the application tables and indexes if they do not yet exist."""
 
     settings = get_settings()
+    db_url = settings.DATABASE_URL
     try:
-        db_path = path_from_database_url(settings.DATABASE_URL)
+        db_path = path_from_database_url(db_url)
     except ValueError as exc:
-        logger.exception("Failed to parse DATABASE_URL %s", settings.DATABASE_URL)
+        logger.exception("Failed to parse DATABASE_URL %s", db_url)
         raise RuntimeError("Invalid DATABASE_URL") from exc
 
     logger.info("Initializing DB at %s", db_path)
