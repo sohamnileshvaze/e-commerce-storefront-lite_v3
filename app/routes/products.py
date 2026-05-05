@@ -17,7 +17,7 @@ def list_products(
     category: Optional[str] = Query(None),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
-    sort_by: str = Query("created_at", regex="^(price|created_at)$"),
+    sort_by: Optional[str] = Query("created_at", regex="^(price|created_at)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     conn: sqlite3.Connection = Depends(get_db),
@@ -26,6 +26,8 @@ def list_products(
     products, total = ProductRepository().search_products(
         conn, search, category, min_price, max_price, sort_by, page, page_size
     )
+    if total is None:
+        total = 0
     items = [ProductOut(**product) for product in products]
     logger.info(
         "list_products search=%s category=%s min_price=%s max_price=%s sort_by=%s page=%s page_size=%s returned=%s total=%s",

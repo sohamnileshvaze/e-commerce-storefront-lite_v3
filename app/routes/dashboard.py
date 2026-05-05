@@ -6,6 +6,7 @@ from app.core.logger import logger
 from app.db.connection import get_db
 from app.models.schemas import DashboardSummary
 from app.routes.auth import get_current_user
+
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
@@ -18,18 +19,25 @@ def get_dashboard_summary(
     user_id = current_user["id"]
     cursor = conn.cursor()
 
-    total_products = cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] or 0
-    total_orders = cursor.execute("SELECT COUNT(*) FROM orders WHERE user_id = ?", (user_id,)).fetchone()[0] or 0
-    pending_orders = cursor.execute(
-        "SELECT COUNT(*) FROM orders WHERE user_id = ? AND order_status = 'pending'", (user_id,)
-    ).fetchone()[0] or 0
-    shipped_orders = cursor.execute(
-        "SELECT COUNT(*) FROM orders WHERE user_id = ? AND order_status = 'shipped'", (user_id,)
-    ).fetchone()[0] or 0
-    total_spent = cursor.execute(
+    def _safe_count(query: str, params: tuple = ()) -> int:
+        result = cursor.execute(query, params).fetchone()
+        return int(result[0]) if result and result[0] is not None else 0
+
+    total_products = _safe_count("SELECT COUNT(*) FROM products")
+    total_orders = _safe_count("SELECT COUNT(*) FROM orders WHERE user_id = ?", (user_id,))
+    pending_orders = _safe_count(
+        "SELECT COUNT(*) FROM orders WHERE user_id = ? AND order_status = 'pending'",
+        (user_id,),
+    )
+    shipped_orders = _safe_count(
+        "SELECT COUNT(*) FROM orders WHERE user_id = ? AND order_status = 'shipped'",
+        (user_id,),
+    )
+    total_spent_raw = cursor.execute(
         "SELECT COALESCE(SUM(total_price), 0) FROM orders WHERE user_id = ? AND order_status != 'cancelled'",
         (user_id,),
-    ).fetchone()[0] or 0.0
+    ).fetchone()
+    total_spent = float(total_spent_raw[0]) if total_spent_raw and total_spent_raw[0] is not None else 0.0
 
     summary = DashboardSummary(
         total_products=total_products,

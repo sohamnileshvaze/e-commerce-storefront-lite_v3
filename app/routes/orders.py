@@ -7,6 +7,7 @@ from app.db.connection import get_db
 from app.models.schemas import OrderOut
 from app.repositories.order_repository import OrderRepository
 from app.routes.auth import get_current_user
+
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
@@ -20,10 +21,11 @@ def list_orders(
     """Return paged orders belonging to the authenticated user."""
     repo = OrderRepository()
     rows, total = repo.get_orders_for_user(conn, current_user["id"], page, page_size)
+    if total is None:
+        total = 0
     orders = [OrderOut(**row) for row in rows]
     logger.info(
-        "list_orders user=%s page=%s page_size=%s returned=%s total=%s",
-        current_user["id"],
+        "list_orders page=%s page_size=%s returned=%s total=%s",
         page,
         page_size,
         len(orders),
@@ -46,11 +48,11 @@ def get_order(
     """Return the specified order when it belongs to the requesting user."""
     order_record = OrderRepository().get_order_by_id(conn, id)
     if not order_record:
-        logger.info("get_order id=%s user=%s status=not_found", id, current_user["id"])
+        logger.info("get_order id=%s status=not_found", id)
         raise HTTPException(status_code=404, detail="Order not found")
     if order_record["user_id"] != current_user["id"]:
-        logger.info("get_order id=%s user=%s status=forbidden", id, current_user["id"])
+        logger.info("get_order id=%s status=forbidden", id)
         raise HTTPException(status_code=403, detail="Forbidden")
     order = OrderOut(**order_record)
-    logger.info("get_order id=%s user=%s status=fetched", id, current_user["id"])
+    logger.info("get_order id=%s status=fetched", id)
     return order
