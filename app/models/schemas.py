@@ -42,7 +42,7 @@ class ProductOut(BaseModel):
     description: str
     category: str
     price: float
-    stock_qty: conint(ge=0)
+    stock_qty: int = Field(..., ge=0)
     image_url: Optional[str] = None
     created_at: datetime
 
@@ -55,7 +55,7 @@ class ProductListResponse(BaseModel):
     items: List[ProductOut]
     page: PositiveInt
     page_size: PositiveInt
-    total: conint(ge=0)
+    total: int = Field(..., ge=0)
 
 
 class OrderOut(BaseModel):
@@ -76,10 +76,10 @@ class OrderOut(BaseModel):
 
 class DashboardSummary(BaseModel):
     """Dashboard KPI summary for a user."""
-    total_products: conint(ge=0)
-    total_orders: conint(ge=0)
-    pending_orders: conint(ge=0)
-    shipped_orders: conint(ge=0)
+    total_products: int = Field(..., ge=0)
+    total_orders: int = Field(..., ge=0)
+    pending_orders: int = Field(..., ge=0)
+    shipped_orders: int = Field(..., ge=0)
     total_spent: float
 
 

@@ -21,7 +21,10 @@ class UserRepository:
                 "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
                 (name, email, password_hash),
             )
-            return cursor.lastrowid
+            user_id = cursor.lastrowid
+            if user_id is None:
+                raise RuntimeError("Failed to retrieve new user id")
+            return user_id
         except sqlite3.IntegrityError as exc:
             if "users.email" in str(exc):
                 logger.debug("Duplicate user email detected: %s", email)

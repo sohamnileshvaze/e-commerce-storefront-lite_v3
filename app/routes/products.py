@@ -17,14 +17,21 @@ def list_products(
     category: Optional[str] = Query(None),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
-    sort_by: Optional[str] = Query("created_at", regex="^(price|created_at)$"),
+    sort_by: Optional[str] = Query("created_at", pattern="^(price|created_at)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> ProductListResponse:
     """List products with optional filters, sorting, and pagination."""
     products, total = ProductRepository().search_products(
-        conn, search, category, min_price, max_price, sort_by, page, page_size
+        conn,
+        search,
+        category,
+        min_price,
+        max_price,
+        (sort_by or "created_at"),
+        page,
+        page_size,
     )
     if total is None:
         total = 0

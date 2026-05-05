@@ -101,4 +101,7 @@ class ProductRepository:
             "INSERT INTO products (name, description, category, price, stock_qty, image_url) VALUES (?, ?, ?, ?, ?, ?)",
             (name, description, category, price, stock_qty, image_url),
         )
-        return cursor.lastrowid
+        product_id = cursor.lastrowid
+        if product_id is None:
+            raise RuntimeError("Failed to retrieve new product id")
+        return product_id

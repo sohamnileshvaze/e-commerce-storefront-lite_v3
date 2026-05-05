@@ -39,6 +39,8 @@ class OrderRepository:
                 (user_id, product_id, quantity, unit_price, total_price, order_status),
             )
             order_id = cursor.lastrowid
+            if order_id is None:
+                raise RuntimeError("Failed to retrieve new order id")
             cursor.execute(
                 "UPDATE products SET stock_qty = stock_qty - ? WHERE id = ?",
                 (quantity, product_id),

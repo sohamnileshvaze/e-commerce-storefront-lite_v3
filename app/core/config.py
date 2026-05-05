@@ -11,7 +11,7 @@ from typing import List
 from pydantic import BaseSettings, Field
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings):  # type: ignore[valid-type, misc]
     """Application settings loaded from environment variables."""
 
     APP_NAME: str = "E-Commerce Storefront Lite"
