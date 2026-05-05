@@ -1,23 +1,26 @@
-import logging
+"""Application entry point and wiring.
+
+This module mounts the frontend static at '/' and registers API routers under the '/api' prefix.
+"""
+
+import inspect
 import os
 
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.requests import Request
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
+from starlette.staticfiles import StaticFiles
 
 from app.core.config import get_settings
-from app.core.logger import configure_logger, logger as configured_logger
+from app.core.logger import configure_logger, logger
 from app.db.connection import init_db, path_from_database_url
 from app.routes import auth as auth_routes
 from app.routes import dashboard as dashboard_routes
 from app.routes import orders as order_routes
 from app.routes import products as product_routes
-
-logger: logging.Logger = configured_logger  # Iteration 4 fix: single module-level logger reference avoids confusion
 
 settings = get_settings()
 app = FastAPI(title=settings.APP_NAME)
@@ -31,21 +34,18 @@ app.add_middleware(
 )
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
-package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-static_dir_valid = os.path.abspath(static_dir).startswith(f"{package_root}{os.sep}")
-static_dir_exists = os.path.isdir(static_dir)
-static_can_mount = static_dir_valid and static_dir_exists
-
-if static_can_mount:
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-    logger.info("Static files mounted at / from %s", os.path.abspath(static_dir))  # Iteration 4 fix: module-level static mount per spec
-else:
-    logger.warning(
-        "Static files not mounted: valid=%s exists=%s path=%s",
-        static_dir_valid,
-        static_dir_exists,
-        static_dir,
+static_dir_real = os.path.realpath(static_dir)
+package_root_real = os.path.realpath(os.path.dirname(__file__))
+if not static_dir_real.startswith(package_root_real + os.sep) and static_dir_real != package_root_real:
+    raise RuntimeError(
+        f"Refusing to mount static directory outside package root: {static_dir!r}"
     )
+if not os.path.isdir(static_dir):
+    raise RuntimeError(
+        f"Static directory not found at {static_dir!r}. Repo is expected to include app/static per project spec."
+    )
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+logger.info("Static files mounted at / from %s", os.path.abspath(static_dir))  # Iteration 4 fix: module-level static mount per spec
 
 API_PREFIX = "/api"  # Iteration 4 fix: keep API routes under /api to avoid root-level static collisions
 app.include_router(auth_routes.router, prefix=API_PREFIX)
@@ -68,7 +68,10 @@ async def on_startup():
         logger.debug('path_from_database_url failed; continuing', exc_info=True)
 
     try:
-        await run_in_threadpool(init_db)
+        if inspect.iscoroutinefunction(init_db):
+            await init_db()
+        else:
+            await run_in_threadpool(init_db)
     except Exception:
         logger.exception('Database initialization failed')
         raise
