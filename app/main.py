@@ -1,11 +1,11 @@
 import logging
 import os
 
-from fastapi import CORSMiddleware
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
@@ -17,7 +17,7 @@ from app.routes import dashboard as dashboard_routes
 from app.routes import orders as order_routes
 from app.routes import products as product_routes
 
-logger: logging.Logger = configured_logger
+logger: logging.Logger = configured_logger  # Iteration 4 fix: single module-level logger reference avoids confusion
 
 settings = get_settings()
 app = FastAPI(title=settings.APP_NAME)
@@ -30,22 +30,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
+static_dir = os.path.join(os.path.dirname(__file__), "static")
 package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-static_dir_valid = static_dir.startswith(f"{package_root}{os.sep}")
+static_dir_valid = os.path.abspath(static_dir).startswith(f"{package_root}{os.sep}")
+static_dir_exists = os.path.isdir(static_dir)
+static_can_mount = static_dir_valid and static_dir_exists
 
-app.include_router(auth_routes.router)
-app.include_router(product_routes.router)
-app.include_router(order_routes.router)
-app.include_router(dashboard_routes.router)
+if static_can_mount:
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    logger.info("Static files mounted at / from %s", os.path.abspath(static_dir))  # Iteration 4 fix: module-level static mount per spec
+else:
+    logger.warning(
+        "Static files not mounted: valid=%s exists=%s path=%s",
+        static_dir_valid,
+        static_dir_exists,
+        static_dir,
+    )
+
+API_PREFIX = "/api"  # Iteration 4 fix: keep API routes under /api to avoid root-level static collisions
+app.include_router(auth_routes.router, prefix=API_PREFIX)
+app.include_router(product_routes.router, prefix=API_PREFIX)
+app.include_router(order_routes.router, prefix=API_PREFIX)
+app.include_router(dashboard_routes.router, prefix=API_PREFIX)
 
 
 @app.on_event('startup')
 async def on_startup():
-    """Configure logging, initialize the database, and mount static assets."""
-    configured = configure_logger()
-    global logger
-    logger = configured
+    """Configure logging and initialize the database."""
+    configure_logger()
 
     logger.info('Starting application')
 
@@ -61,22 +73,7 @@ async def on_startup():
         logger.exception('Database initialization failed')
         raise
 
-    static_already_mounted = getattr(app.state, '_static_mounted', False)
-    static_dir_exists = os.path.isdir(static_dir)
-
-    if static_already_mounted:
-        logger.debug('Static files already mounted; skipping republish at %s', static_dir)
-    elif static_dir_valid and static_dir_exists:
-        app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
-        app.state._static_mounted = True
-        logger.info('Static files mounted at / from %s', static_dir)
-    else:
-        logger.warning(
-            'Static files not mounted: valid=%s exists=%s path=%s',
-            static_dir_valid,
-            static_dir_exists,
-            static_dir,
-        )
+    # Static files are mounted at import time per spec; no runtime remount needed.
 
 
 @app.on_event('shutdown')
